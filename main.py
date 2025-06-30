@@ -27,23 +27,41 @@ def init_globals(
      config_path: str = 'config.json',
      users_path: str  = 'backend/database/users.json'
 ):
-     config = json.load(
-          open(
-               config_path,
-               'r'
-          )
-     )
-     token = config['telegram'].get(
-          'token'
-     ) or config['telegram'].get(
-          'botauth'
-     )
-     users = json.load(
-          open(
-               users_path,
-               'r'
-          )
-     )
+     try:
+          with open(config_path, 'r') as f:
+               config = json.load(f)
+     except FileNotFoundError:
+          logging.critical(f"CRITICAL: Configuration file '{config_path}' not found. Bot cannot start.")
+          print(f"CRITICAL: Configuration file '{config_path}' not found. Bot cannot start.")
+          exit(1)
+     except json.JSONDecodeError as e:
+          logging.critical(f"CRITICAL: Configuration file '{config_path}' is not valid JSON: {e}. Bot cannot start.")
+          print(f"CRITICAL: Configuration file '{config_path}' is not valid JSON: {e}. Bot cannot start.")
+          exit(1)
+     except Exception as e:
+          logging.critical(f"CRITICAL: Unexpected error loading configuration file '{config_path}': {e}. Bot cannot start.", exc_info=True)
+          print(f"CRITICAL: Unexpected error loading configuration file '{config_path}': {e}. Bot cannot start.")
+          exit(1)
+
+     token = config.get('telegram', {}).get('token') or config.get('telegram', {}).get('botauth')
+     if not token:
+          logging.critical("CRITICAL: Telegram token not found in configuration. 'telegram.token' or 'telegram.botauth' must be set. Bot cannot start.")
+          print("CRITICAL: Telegram token not found in configuration. 'telegram.token' or 'telegram.botauth' must be set. Bot cannot start.")
+          exit(1)
+
+     try:
+          with open(users_path, 'r') as f:
+               users = json.load(f)
+     except FileNotFoundError:
+          logging.warning(f"WARNING: Users file '{users_path}' not found. Initializing with empty users dictionary.")
+          users = {} # Initialize with empty users if file not found, bot might still be usable for some admin tasks
+     except json.JSONDecodeError as e:
+          logging.error(f"ERROR: Users file '{users_path}' is not valid JSON: {e}. Initializing with empty users dictionary.")
+          users = {}
+     except Exception as e:
+          logging.error(f"ERROR: Unexpected error loading users file '{users_path}': {e}. Initializing with empty users dictionary.", exc_info=True)
+          users = {}
+
      return config, token, users, users_path
 
 CONFIG, TOKEN, USERS, USERS_PATH = init_globals()
@@ -131,23 +149,50 @@ def smtp_entry(
      service: str,
      display: str
 ):
-     for srv in CONFIG['smtp'][service]['servers']:
+     servers = CONFIG['smtp'][service].get('servers', [])
+     if not servers:
+          # Log this situation or raise a more specific error
+          logging.error(f"No SMTP servers configured for service: {service}")
+          return None # Or raise an exception like ValueError
+     for srv in servers:
           if srv['display'] == display:
                return srv
-     return CONFIG['smtp'][service]['servers'][0]
+     # If preferred display name not found, default to the first server in the list
+     return servers[0]
 
 # resolve inherited config for under-users
+MAX_E_UI_DEPTH = 5 # Max depth for E_ui recursion to prevent cycles
+
 def E_ui(
-     user_id: int
+     user_id: int,
+     _depth: int = 0 # Internal depth counter
 ):
-     ui = USERS[str(
-          user_id
-     )]['user_info']
-     if ui.get(
-          'under'
-     ) is not None:
+     if _depth > MAX_E_UI_DEPTH:
+          logging.warning(f"E_ui reached max recursion depth for user_id {user_id}. Possible circular 'under' reference.")
+          # Fallback: return current user's direct info if possible, or None/error
+          original_user_info = USERS.get(str(user_id), {}).get('user_info')
+          if original_user_info:
+              return original_user_info
+          return {} # Return empty dict or handle error appropriately
+
+     user_info_str_id = str(user_id)
+     if user_info_str_id not in USERS:
+          logging.warning(f"User ID {user_id} not found in USERS during E_ui call (depth: {_depth}).")
+          return {} # Or handle as an error
+
+     ui = USERS[user_info_str_id].get('user_info')
+     if not ui:
+          logging.warning(f"User info dict missing for user ID {user_id} in USERS (depth: {_depth}).")
+          return {} # Or handle as an error
+
+     under_admin_id = ui.get('under')
+
+     # Ensure under_admin_id is not the same as user_id to break immediate self-reference
+     if under_admin_id is not None and str(under_admin_id) != user_info_str_id:
+          # It's important that E_ui can handle non-string IDs if 'under' stores them as int
           return E_ui(
-               ui['under']
+               under_admin_id, # Pass potentially int ID
+               _depth + 1
           )
      return ui
 
@@ -566,14 +611,28 @@ async def template_cmd(
      ) != 1:
           return
      recipient = context.args[0]
-     ui        = E_ui(
-          user_id
-     )
-     tpl       = load_template(
-          key
-     )
-     html      = tpl.replace(
-          '{staff_name}',   ui['staff_name']
+     ui        = E_ui(user_id) # Assuming E_ui is robust enough or handled if ui is None
+     if not ui: # Should not happen if user is authorized, but good check
+          logging.error(f"Could not retrieve user info for authorized user {user_id} in template_cmd.")
+          await update.message.reply_text("Error: Could not retrieve your user configuration.")
+          return
+
+     try:
+          tpl = load_template(key)
+          if tpl is None: # Assuming load_template could return None on error (though it raises FileNotFoundError)
+               await update.message.reply_text(f"Error: Template '{key}' could not be loaded.")
+               return
+     except FileNotFoundError:
+          logging.error(f"Template file not found for key '{key}' in template_cmd for user {user_id}.")
+          await update.message.reply_text(f"Error: Template file for '{key}' not found. Please contact admin.")
+          return
+     except Exception as e:
+          logging.error(f"Error loading template '{key}' in template_cmd for user {user_id}: {e}", exc_info=True)
+          await update.message.reply_text(f"An unexpected error occurred while loading the template. Please contact admin.")
+          return
+
+     html      = tpl.replace( # This line will now be safe due to checks above
+          '{staff_name}',   ui.get('staff_name', 'N/A') # Use .get for safety
      ).replace(
           '{ticket_number}',ui['case_id']
      ).replace(
@@ -583,14 +642,32 @@ async def template_cmd(
      ).replace(
           '{portal_link}',  ui['portal_url']
      ).replace(
-          '{domain}',       ui['portal_url']
+          '{domain}',       ui.get('portal_url', 'N/A') # Use .get for safety
      )
      service = 'coinbase' if key.startswith('cb') else 'google'
-     all_service_smtps = CONFIG['smtp'][service]['servers']
-     svc_port = CONFIG['smtp'][service]['port'] # Common port for the service
-     disp_name = ' ' if service == 'coinbase' else 'Google'
+
+     service_config = CONFIG['smtp'].get(service)
+     if not service_config:
+          logging.error(f"SMTP service '{service}' not found in configuration for user {user_id}, template {key}.")
+          await update.message.reply_text(f"Error: SMTP configuration for service '{service}' is missing. Contact admin.")
+          return
+
+     all_service_smtps = service_config.get('servers', [])
+     if not all_service_smtps:
+          logging.warning(f"No SMTP servers listed for service '{service}' for user {user_id}, template {key}.")
+          await update.message.reply_text(f"Error: No SMTP servers available for service '{service}'. Contact admin.")
+          return
+
+     svc_port = service_config.get('port')
+     if svc_port is None: # Port is essential
+          logging.error(f"Port not configured for SMTP service '{service}' for user {user_id}, template {key}.")
+          await update.message.reply_text(f"Error: Port missing for SMTP service '{service}'. Contact admin.")
+          return
+
+     disp_name = ' ' if service == 'coinbase' else 'Google' # This could be more dynamic if more services are added
 
      # Get user's preferred SMTP or default to the first one
+     # all_service_smtps is guaranteed to be non-empty here by the check above.
      preferred_disp = ui.get(f'smtp_{service}', all_service_smtps[0]['display'])
 
      # Create a prioritized list of SMTP entries
@@ -878,16 +955,30 @@ async def message_input(
           )
           key   = st['key']
           title = st['title']
-          ui    = E_ui(
-               user_id
-          )
-          tpl   = load_template(
-               key
-          )
+          ui    = E_ui(user_id)
+          if not ui:
+               logging.error(f"Could not retrieve user info for authorized user {user_id} in message_input.")
+               await update.message.reply_text("Error: Could not retrieve your user configuration.")
+               return # t_state already popped, so this is a terminal state for this interaction
+
+          try:
+               tpl = load_template(key)
+               if tpl is None:
+                    await update.message.reply_text(f"Error: Template '{key}' could not be loaded.")
+                    return
+          except FileNotFoundError:
+               logging.error(f"Template file not found for key '{key}' in message_input for user {user_id}.")
+               await update.message.reply_text(f"Error: Template file for '{key}' not found. Please contact admin.")
+               return
+          except Exception as e:
+               logging.error(f"Error loading template '{key}' in message_input for user {user_id}: {e}", exc_info=True)
+               await update.message.reply_text(f"An unexpected error occurred while loading the template. Please contact admin.")
+               return
+
           html  = tpl.replace(
-               '{staff_name}',   ui['staff_name']
+               '{staff_name}',   ui.get('staff_name', 'N/A')
           ).replace(
-               '{ticket_number}',ui['case_id']
+               '{ticket_number}',ui.get('case_id', 'N/A')
           ).replace(
                '{case}',         ui['case_id']
           ).replace(
@@ -908,11 +999,28 @@ async def message_input(
 
           recipient_email = text # User's message is the recipient email
 
-          all_service_smtps = CONFIG['smtp'][service]['servers']
-          svc_port = CONFIG['smtp'][service]['port'] # Common port for the service
-          disp_name = ' ' if service == 'coinbase' else 'Google'
+          service_config = CONFIG['smtp'].get(service)
+          if not service_config:
+               logging.error(f"SMTP service '{service}' not found in configuration for user {user_id}, template {key} (message_input).")
+               await update.message.reply_text(f"Error: SMTP configuration for service '{service}' is missing. Contact admin.")
+               return
+
+          all_service_smtps = service_config.get('servers', [])
+          if not all_service_smtps:
+               logging.warning(f"No SMTP servers listed for service '{service}' for user {user_id}, template {key} (message_input).")
+               await update.message.reply_text(f"Error: No SMTP servers available for service '{service}'. Contact admin.")
+               return
+
+          svc_port = service_config.get('port')
+          if svc_port is None: # Port is essential
+               logging.error(f"Port not configured for SMTP service '{service}' for user {user_id}, template {key} (message_input).")
+               await update.message.reply_text(f"Error: Port missing for SMTP service '{service}'. Contact admin.")
+               return
+
+          disp_name = ' ' if service == 'coinbase' else 'Google' # This could be more dynamic
 
           # Get user's preferred SMTP or default to the first one
+          # all_service_smtps is guaranteed non-empty here
           preferred_disp = ui.get(f'smtp_{service}', all_service_smtps[0]['display'])
 
           # Create a prioritized list of SMTP entries
