@@ -922,8 +922,8 @@ async def message_input(
           )
 
           sent_successfully = False
-     logging.info(f"User {user_id} initiating single email send (message_input) for template '{key}' to '{recipient_email}'. Available SMTPs for '{service}': {[s['display'] for s in sorted_smtp_entries]}. Preferred: {preferred_disp}")
-          for entry in sorted_smtp_entries:
+          logging.info(f"User {user_id} initiating single email send (message_input) for template '{key}' to '{recipient_email}'. Available SMTPs for '{service}': {[s['display'] for s in sorted_smtp_entries]}. Preferred: {preferred_disp}")
+          for entry in sorted_smtp_entries: # This loop and the logging call above should align with sent_successfully
                smtp_config = {
                     'server':   entry['host'],
                     'port':     svc_port,
