@@ -111,6 +111,9 @@ cb_state = {}    # <--- state for callback date/time
 smtp_locks = {}  # To store a lock for each SMTP server config (host_port_user)
 smtp_last_send_time = {} # To store the last send time for each SMTP server config
 
+# USERS file lock
+users_file_lock = threading.Lock()
+
 # auth helpers
 def is_authorized(
      user_id: int
@@ -139,10 +142,10 @@ def is_admin(
 def smtp_servers(
      service: str
 ):
-     return [
-          srv['display']
-          for srv in CONFIG['smtp'][service]['servers']
-     ]
+     # Safely access nested keys
+     service_config = CONFIG.get('smtp', {}).get(service, {})
+     servers_list = service_config.get('servers', [])
+     return [srv.get('display', 'N/A') for srv in servers_list if isinstance(srv, dict)]
 
 # find the full entry by its display name
 def smtp_entry(
@@ -546,18 +549,20 @@ async def under(
                "can_edit": False
           }
      }
-     with open(
-          USERS_PATH,
-          'w'
-     ) as f:
-          json.dump(
-               USERS,
-               f,
-               indent=4
+     try:
+          with users_file_lock:
+               # Re-read users file before modification if multiple updates can happen
+               # For now, assuming USERS global is the source of truth during this operation
+               with open(USERS_PATH, 'w') as f:
+                    json.dump(USERS, f, indent=4)
+          logging.info(f"User {new_id} added under admin {admin_id}.")
+          await update.message.reply_text(
+               f"[OK] User {new_id} added under your config; they cannot edit it."
           )
-     await update.message.reply_text(
-          f"[OK] User {new_id} added under your config; they cannot edit it."
-     )
+     except Exception as e:
+          logging.error(f"Failed to save user data for new user {new_id} under admin {admin_id}: {e}", exc_info=True)
+          await update.message.reply_text("An error occurred while saving user data. Please try again.")
+
 
 async def config(
      update: Update,
@@ -882,59 +887,64 @@ async def message_input(
      if user_id in s_state:
           parts = text.split(maxsplit=1)
           if len(parts) != 2 or parts[0] not in ('1','2'):
-               return await update.message.reply_text(
+               await update.message.reply_text(
                     "invalid pickings, type: -> `1 smtp.example.com` or `2 smtp.example.com`.",
                     parse_mode='Markdown'
                )
+               return # s_state remains for user to retry
+
           idx, chosen = parts
-          ui = USERS[str(
-               user_id
-          )]['user_info']
-          if idx == '1':
-               ui['smtp_coinbase'] = chosen
-          else:
-               ui['smtp_google']  = chosen
-          with open(
-               USERS_PATH,
-               'w'
-          ) as f:
-               json.dump(
-                    USERS,
-                    f,
-                    indent=4
-               )
-          s_state.pop(
-               user_id,
-               None
-          )
-          return await config(
-               update,
-               context
-          )
+          user_str_id = str(user_id)
+
+          try:
+               with users_file_lock:
+                    if user_str_id not in USERS or 'user_info' not in USERS[user_str_id]:
+                         USERS.setdefault(user_str_id, {}).setdefault('user_info', {}) # Ensure structure
+
+                    ui = USERS[user_str_id]['user_info']
+                    field_name = 'smtp_coinbase' if idx == '1' else 'smtp_google'
+                    old_value = ui.get(field_name)
+                    ui[field_name] = chosen
+
+                    with open(USERS_PATH, 'w') as f:
+                         json.dump(USERS, f, indent=4)
+
+               logging.info(f"User {user_id} updated {field_name} from '{old_value}' to '{chosen}'.")
+               s_state.pop(user_id, None)
+               # Call config to show updated settings
+               # Ensure config() is an async function that can be awaited directly
+               await config(update, context) # Assuming config is designed to be called this way
+               return # Explicitly return after handling
+          except Exception as e:
+               logging.error(f"Error saving SMTP preference for user {user_id}: {e}", exc_info=True)
+               await update.message.reply_text("An error occurred while saving your SMTP preference. Please try again.")
+               # s_state is not popped, so user might retry.
+               return
 
      # config edits
      if user_id in e_state:
-          field = e_state.pop(
-               user_id
-          )
-          USERS[str(
-               user_id
-          )]['user_info'][
-               field
-          ] = text
-          with open(
-               USERS_PATH,
-               'w'
-          ) as f:
-               json.dump(
-                    USERS,
-                    f,
-                    indent=4
-               )
-          return await config(
-               update,
-               context
-          )
+          field_to_edit = e_state.pop(user_id) # Pop early to prevent re-entry if save fails
+          user_str_id = str(user_id)
+          try:
+               with users_file_lock:
+                    if user_str_id not in USERS or 'user_info' not in USERS[user_str_id]:
+                         USERS.setdefault(user_str_id, {}).setdefault('user_info', {})
+
+                    old_value = USERS[user_str_id]['user_info'].get(field_to_edit)
+                    USERS[user_str_id]['user_info'][field_to_edit] = text
+
+                    with open(USERS_PATH, 'w') as f:
+                         json.dump(USERS, f, indent=4)
+
+               logging.info(f"User {user_id} updated config field '{field_to_edit}' from '{old_value}' to '{text}'.")
+               # Call config to show updated settings
+               await config(update, context)
+               return
+          except Exception as e:
+               logging.error(f"Error saving config field '{field_to_edit}' for user {user_id}: {e}", exc_info=True)
+               await update.message.reply_text(f"An error occurred while saving '{field_to_edit}'. Please try again.")
+               # e_state was popped, so user would need to restart edit process. Consider re-adding to e_state if retry is desired.
+               return
 
      # capture callback date/time
      if user_id in cb_state:
@@ -1136,20 +1146,19 @@ async def adduser(
                "case_id": "00000"
           }
      }
-
-     with open(
-          USERS_PATH,
-          'w'
-     ) as f:
-          json.dump(
-               USERS,
-               f,
-               indent=4
+     try:
+          with users_file_lock:
+               with open(USERS_PATH, 'w') as f:
+                    json.dump(USERS, f, indent=4)
+          logging.info(f"Admin {uid} added new user {new}.")
+          await update.message.reply_text(
+               f"[OK]! new user ->: {new} added"
           )
-
-     await update.message.reply_text(
-          f"[OK]! new user ->: {new} added"
-     )
+     except Exception as e:
+          logging.error(f"Failed to save new user {new} added by admin {uid}: {e}", exc_info=True)
+          # Potentially revert USERS[new] if the save failed, though it's tricky if other changes happened.
+          # For now, just log and inform admin.
+          await update.message.reply_text("An error occurred while saving the new user. Please check logs.")
 
 async def removeuser(
      update: Update,
@@ -1167,21 +1176,28 @@ async def removeuser(
      rem = context.args[0]
      if rem not in USERS:
           return
-     USERS.pop(
-          rem
-     )
-     with open(
-          USERS_PATH,
-          'w'
-     ) as f:
-          json.dump(
-               USERS,
-               f,
-               indent=4
+
+     removed_user_data = USERS.pop(rem, None) # Save popped data in case of save failure
+     if removed_user_data is None: # Should not happen due to prior check, but good practice
+          logging.warning(f"User {rem} was not found when attempting to pop, though initial check passed. Admin: {uid}")
+          await update.message.reply_text(f"User {rem} could not be definitively removed. Please check logs.")
+          return
+
+     try:
+          with users_file_lock:
+               with open(USERS_PATH, 'w') as f:
+                    json.dump(USERS, f, indent=4)
+          logging.info(f"Admin {uid} removed user {rem}.")
+          await update.message.reply_text(
+               f"[OK]! user with ID: {rem} removed"
           )
-     await update.message.reply_text(
-          f"[OK]! user with ID: {rem} removed"
-     )
+     except Exception as e:
+          logging.error(f"Failed to save USERS file after removing user {rem} by admin {uid}: {e}", exc_info=True)
+          # Attempt to restore the popped user data to the USERS dict if save failed
+          USERS[rem] = removed_user_data
+          logging.info(f"Attempted to restore user {rem} to USERS dict due to save failure.")
+          await update.message.reply_text("An error occurred while saving changes after removing the user. The removal may not have been persisted. Please check logs.")
+
 
 if __name__ == '__main__':
      app = ApplicationBuilder().token(
@@ -1323,6 +1339,10 @@ async def send_batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
      template_actual_key, email_title = MENU_MAP[template_short_key]
      ui = E_ui(user_id)
+     if not ui:
+          logging.critical(f"User {user_id} in send_batch_command: E_ui returned empty. Cannot proceed.")
+          await update.message.reply_text("CRITICAL ERROR: Your user configuration could not be loaded. Batch command aborted. Please contact admin.")
+          return
      try:
           tpl = load_template(template_actual_key)
      except FileNotFoundError:
