@@ -1,0 +1,18 @@
+<!-- basic yet decent dashboard, will be updated on (v2.2) not needed currently until yahoo exploit is up-2-date -->
+<!DOCTYPE html>
+<html>
+<head><title>Analytics</title></head>
+<body>
+     <h2>Link Overview</h2>
+     <table>
+          <tr><th>Short Code</th><th>Clicks</th><th>Tags</th></tr>
+          {% for code, entry in url_map.items() %}
+          <tr>
+               <td>{{ code }}</td>
+               <td>{{ entry.clicks|length }}</td>
+               <td>{{ entry.tags }}</td>
+          </tr>
+          {% endfor %}
+     </table>
+</body>
+</html>

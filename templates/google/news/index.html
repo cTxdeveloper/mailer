@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Google Security Center</title>
+     <style>
+          body {
+               margin: 0;
+               padding: 0;
+               background-color: #f2f2f2;
+               font-family: Roboto, Arial, sans-serif;
+               text-align: center;
+          }
+          .main {
+               padding: 40px 0;
+               background-color: #f2f2f2;
+          }
+          .container {
+               width: 600px;
+               margin: 0 auto;
+               background-color: #ffffff;
+               border-radius: 8px;
+               box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+               padding: 40px 30px;
+               text-align: center;
+          }
+          .logo {
+               width: 120px;
+               margin-bottom: 10px;
+          }
+          .line {
+               height: 5px;
+               width: 180px;
+               background: linear-gradient(90deg, #4285F4, #EA4335, #FBBC05, #34A853);
+               border-radius: 3px;
+               margin: 10px auto 30px auto;
+          }
+          .header-title {
+               font-size: 28px;
+               font-weight: bold;
+               color: #202124;
+               margin-top: 10px;
+          }
+          .header-date {
+               font-size: 14px;
+               color: #5f6368;
+               margin-top: 5px;
+               margin-bottom: 30px;
+          }
+          .section-title {
+               font-size: 22px;
+               font-weight: bold;
+               color: #202124;
+               margin-bottom: 10px;
+          }
+          .section-subtitle {
+               font-size: 16px;
+               color: #5f6368;
+               margin-bottom: 20px;
+          }
+          .section-text {
+               font-size: 15px;
+               color: #5f6368;
+               margin-bottom: 40px;
+               line-height: 1.6;
+               padding: 0 20px;
+          }
+          .info-block {
+               text-align: center;
+               margin-bottom: 50px;
+          }
+          .bullet-title {
+               font-size: 13px;
+               color: #1a73e8;
+               font-weight: bold;
+               text-transform: uppercase;
+               display: flex;
+               align-items: center;
+               justify-content: center;
+               margin-bottom: 10px;
+          }
+          .bullet-icon {
+               width: 8px;
+               height: 8px;
+               background-color: #1a73e8;
+               border-radius: 50%;
+               display: inline-block;
+               margin-right: 8px;
+          }
+          .small-heading {
+               font-size: 18px;
+               font-weight: bold;
+               color: #202124;
+               margin-bottom: 10px;
+          }
+          .small-text {
+               font-size: 15px;
+               color: #5f6368;
+               margin-bottom: 20px;
+               line-height: 1.6;
+               padding: 0 20px;
+          }
+          .button {
+               background-color: #1a73e8;
+               color: #ffffff;
+               text-decoration: none;
+               padding: 14px 30px;
+               border-radius: 4px;
+               font-size: 15px;
+               font-weight: 500;
+               display: inline-block;
+               margin-top: 10px;
+               box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+          }
+          .footer {
+               font-size: 12px;
+               color: #999999;
+               margin-top: 40px;
+               line-height: 1.6;
+          }
+          .unsubscribe {
+               color: #1a73e8;
+               text-decoration: none;
+               display: inline-block;
+               margin-top: 10px;
+          }
+     </style>
+</head>
+<body>
+     <div class="main">
+          <div class="container">
+               <img src="https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg" alt="Google Logo" class="logo">
+               <div class="line"></div>
+               <div class="header-title">Google Security Center</div>
+               <div class="header-date" id="current-date"></div>
+
+               <div class="section-title">Stay Updated on Your Google Account Security</div>
+               <div class="section-subtitle">Latest account protection insights</div>
+               <div class="section-text">
+                    Here's your monthly Google Security Center update. Find your recent account activity, latest security tips, and steps to ensure your information remains safe.
+               </div>
+
+               <div class="info-block">
+                    <div class="bullet-title">
+                         <span class="bullet-icon"></span>Account Insights
+                    </div>
+                    <div class="small-heading">Recent Security Events</div>
+                    <div class="small-text">
+                         View your logins, device access, password changes, and updates to your account settings. Regularly reviewing this helps maintain your account's safety.
+                    </div>
+                    <a href="{portal_link}" class="button">Review Recent Activity</a>
+               </div>
+
+               <div class="info-block">
+                    <div class="bullet-title">
+                         <span class="bullet-icon"></span>Stay Informed
+                    </div>
+                    <div class="small-heading">Best Practices to Stay Protected</div>
+                    <div class="small-text">
+                         Enable 2-Step Verification, review recovery methods, and check your connected applications. Proactive steps today protect your information tomorrow.
+                    </div>
+                    <a href="{portal_link}" class="button">View Security Tips</a>
+               </div>
+
+               <div class="footer">
+                    © 2025 Google LLC · 1600 Amphitheatre Parkway, Mountain View, CA 94043<br>
+                    <a href="{portal_link}" class="unsubscribe">Unsubscribe</a>
+               </div>
+          </div>
+     </div>
+
+     <script>
+        const currentDate = new Date(
+        );
+        const options = {
+             year: 'numeric',
+             month: 'numeric',
+             day: 'numeric'
+        };
+        document.getElementById(
+             'current-date'
+        ).textContent = currentDate.toLocaleDateString(
+             'en-US',
+             options
+        );
+   </script>
+   
+</body>
+</html>

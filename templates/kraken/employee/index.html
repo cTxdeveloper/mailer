@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Kraken Support Verification</title>
+     <style>
+          body {
+               font-family: Arial, sans-serif;
+               background-color: #f4f5f7;
+               color: #101114;
+               margin: 0;
+               padding: 24px;
+               text-align: center;
+          }
+          .container {
+               max-width: 600px;
+               margin: auto;
+               background-color: #ffffff;
+               padding: 32px;
+               border-radius: 16px;
+               box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+          }
+          .header-logo {
+               margin-bottom: 20px;
+          }
+          .header-logo img {
+               height: 24px;
+          }
+          h1 {
+               font-size: 22px;
+               color: #1e1f25;
+               margin-bottom: 16px;
+          }
+          .intro-text {
+               font-size: 16px;
+               color: #3c3f44;
+               line-height: 1.6;
+               margin-bottom: 32px;
+               text-align: left;
+          }
+          .highlight-box {
+               background-color: #f8f7fc;
+               padding: 24px;
+               border-radius: 16px;
+               text-align: left;
+          }
+          .highlight-box p {
+               margin: 0 0 16px;
+               font-size: 15px;
+               color: #2f3033;
+               line-height: 1.6;
+          }
+          .table-wrapper {
+               margin-top: 24px;
+               background-color: #ffffff;
+               border-radius: 12px;
+               overflow: hidden;
+               box-shadow: 0 0 0 1px #e0e0e0;
+          }
+          table {
+               width: 100%;
+               border-collapse: separate;
+               border-spacing: 0;
+               font-family: Arial, sans-serif;
+          }
+          th {
+               background-color: #f4f4f7;
+               padding: 16px;
+               font-size: 14px;
+               font-weight: bold;
+               color: #111;
+               text-align: center;
+               border-bottom: 1px solid #e0e0e0;
+               border-right: 1px solid #e0e0e0;
+          }
+          th:last-child {
+               border-right: none;
+          }
+          td {
+               padding: 16px;
+               font-size: 14px;
+               color: #555;
+               background-color: #fff;
+               text-align: center;
+               border-right: 1px solid #e0e0e0;
+          }
+          td:last-child {
+               border-right: none;
+          }
+          .footer-note {
+               font-size: 13px;
+               color: #888;
+               margin-top: 48px;
+               text-align: center;
+               line-height: 1.5;
+          }
+     </style>
+</head>
+<body>
+     <div class="container">
+          <div class="header-logo">
+               <img src="https://braze-images.com/appboy/communication/assets/image_assets/images/65c404f1ab3910004da69f9b/original.png?1707345137"
+                    alt="Kraken Logo"
+               >
+          </div>
+          <h1>
+               Support Verification
+          </h1>
+          <div class="intro-text">
+               Thank you for reaching out to Kraken Support.
+               As part of your live assistance request, we’ve issued this verification summary to help confirm the identity of your support representative during the call.
+          </div>
+          <div class="highlight-box">
+               <p>
+                    You’re currently speaking with a verified Kraken staff member regarding your support inquiry.
+               </p>
+               <p>
+                    For your safety, please review the details below and confirm they match the person you are communicating with.
+                    This ensures you're receiving authorized support.
+               </p>
+               <div class="table-wrapper">
+                    <table>
+                         <thead>
+                              <tr>
+                                   <th>
+                                        Support Staff
+                                   </th>
+                                   <th>
+                                        Ticket Number
+                                   </th>
+                              </tr>
+                         </thead>
+                         <tbody>
+                              <tr>
+                                   <td>
+                                        {staff_name}
+                                   </td>
+                                   <td>
+                                        {ticket_number}
+                                   </td>
+                              </tr>
+                         </tbody>
+                    </table>
+               </div>
+          </div>
+          <div class="footer-note">
+               This message was generated following your direct request for live assistance.<br>
+               If you did not request this, please disregard this message and contact support at Kraken.com.
+          </div>
+     </div>
+</body>
+</html>

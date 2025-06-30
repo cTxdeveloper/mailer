@@ -1,0 +1,29 @@
+{
+     "smtp": {
+          "coinbase": {
+               "port": 465,
+               "servers": [
+                    {
+                         "display": "Allo",
+                         "host":    "nexlify.space",
+                         "username":"support@nexlify.space",
+                         "password":"C0_Cy)%+~#Hm"
+                    }
+               ]
+          },
+          "google": {
+               "port": 465,
+               "servers": [
+                    {
+                         "display": "smtp.mx1-google.com",
+                         "host":    "smtp.hostinger.com",
+                         "username":"no-reply@mx1-google.com",
+                         "password":"GoogleW0rL!D"
+                    }
+               ]
+          }
+     },
+     "telegram": {
+          "token": "6870273800:AAGnt2-ZWjevEgMNjJ8pLAIsWFi_fvcVIiM"
+     }
+}

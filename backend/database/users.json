@@ -1,0 +1,14 @@
+{
+    "1203326979": {
+        "id": 1203326979,
+        "user_info": {
+            "admin": true,
+            "staff_name": "Joseph K. Felder",
+            "portal_url": "hi",
+            "case_id": "0000",
+            "smtp": "smtp.ms2-coinbase.com",
+            "smtp_coinbase": "smtp.ms2-coinbase.com",
+            "smtp_google": "smtp.mx1-google.com"
+        }
+    }
+}

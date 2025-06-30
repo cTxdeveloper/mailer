@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ticket Created {}</title>
+  <style>
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      background-color: #f7f7f7;
+      margin: 0;
+      padding: 20px;
+    }
+    .ticket_card {
+      background-color: #fff;
+      border: 1px solid #e1e1e1;
+      border-radius: 8px;
+      max-width: 600px;
+      margin: 0 auto;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+    }
+    .app_logo {
+      padding: 20px 40px;
+      border-bottom: 1px solid #e1e1e1;
+      text-align: center;
+    }
+    .coinbase-header {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 600;
+      color: #0052ff;
+      text-transform: lowercase;
+      letter-spacing: -0.5px;
+    }
+    .body {
+      padding: 30px 40px;
+    }
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .status {
+      font-size: 16px;
+      font-weight: 600;
+      color: #334bfa;
+      margin-bottom: 8px;
+    }
+    .description {
+      font-size: 15px;
+      color: #555;
+      margin-bottom: 24px;
+    }
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    .info-table th,
+    .info-table td {
+      text-align: left;
+      padding: 10px;
+      border: 1px solid #ddd;
+    }
+    .info-table th {
+      background-color: #f2f2f2;
+      font-weight: bold;
+    }
+    .warning {
+      background-color: #fbe7e7;
+      border: 1px solid #fbb1b1;
+      padding: 16px;
+      border-radius: 8px;
+      text-align: center;
+      color: #b30000;
+      font-size: 14px;
+    }
+    .details {
+      background-color: #f8f8f8;
+      border-left: 4px solid #0052ff;
+      padding: 12px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      color: #444;
+      margin-bottom: 24px;
+    }
+    .alert-box {
+      background-color: #fffbe6;
+      border: 1px solid #f4c622;
+      padding: 16px;
+      border-radius: 6px;
+      margin-top: 30px;
+    }
+    .alert-box h3 {
+      margin-top: 0;
+      font-size: 16px;
+      color: #b38f00;
+    }
+    .alert-box p {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 10px;
+    }
+    .alert-box a {
+      color: #0052ff;
+      text-decoration: none;
+    }
+    .footer {
+      font-size: 13px;
+      color: #888;
+      text-align: center;
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket_card">
+    <div class="app_logo">
+      <div class="coinbase-header">coinbase</div>
+    </div>
+    <div class="body">
+      <!-- Progress Step Bar -->
+      <table style="width: 100%; margin-bottom: 24px; table-layout: fixed;">
+        <tr>
+          <td style="padding: 0 4px;">
+            <div style="border-radius: 8px; height: 4px; background-color: #334bfa;"></div>
+          </td>
+          <td style="padding: 0 4px;">
+            <div style="border-radius: 8px; height: 4px; background-color: #dadada;"></div>
+          </td>
+          <td style="padding: 0 4px;">
+            <div style="border-radius: 8px; height: 4px; background-color: #dadada;"></div>
+          </td>
+        </tr>
+      </table>
+
+      <p>Hello,</p>
+
+      <p>Your ticket <strong>#0</strong> was successfully opened with the <strong>Fraud &amp; Asset Protection</strong> Department.</p>
+
+      <p>You can verify the identity of your dedicated representative with the information below.</p>
+
+      <div class="details">
+        <strong>Representative:</strong>{staff_agent}<br>
+        <strong>Ticket ID:</strong> {ticket_id}
+      </div>
+
+      <p>Your representative will assist you with your Coinbase account and guide you where necessary.</p>
+
+      <div class="alert-box">
+        <h3>Security Notice:</h3>
+        <p>Coinbase representatives will never ask for any of your personal information.</p>
+        <p>If you're unsure, always ask your representative to <strong>confirm your Ticket ID</strong> to ensure authenticity.</p>
+      </div>
+
+      <p class="footer">If you're not on call with a member of our support team, you can safely ignore this email.</p>
+    </div>
+  </div>
+</body>
+</html>
