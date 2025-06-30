@@ -2,6 +2,11 @@ import json
 import os
 import smtplib
 import time
+import threading
+import concurrent.futures
+import asyncio
+import logging
+import logging.handlers
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -43,11 +48,50 @@ def init_globals(
 
 CONFIG, TOKEN, USERS, USERS_PATH = init_globals()
 
+# Logging Setup
+def setup_logging():
+    log_config = CONFIG.get('logging', {})
+    if log_config.get('enabled', False):
+        log_level_str = log_config.get('log_level', 'INFO').upper()
+        log_level = getattr(logging, log_level_str, logging.INFO)
+
+        log_file = log_config.get('log_file', 'logs/mailer.log')
+        # Ensure log directory exists
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+
+        logger = logging.getLogger() # Get root logger
+        logger.setLevel(log_level)
+
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+        # Rotating File Handler
+        # Rotate after 5MB, keep 5 backup files
+        rfh = logging.handlers.RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5, encoding='utf-8')
+        rfh.setFormatter(formatter)
+        logger.addHandler(rfh)
+
+        # Console Handler (optional, could be controlled by config too)
+        sh = logging.StreamHandler()
+        sh.setFormatter(formatter)
+        # You might want a different level for console, e.g., INFO, while file is DEBUG
+        # For now, same as root logger.
+        logger.addHandler(sh)
+
+        logging.info("Logging initialized.")
+    else:
+        logging.disable(logging.CRITICAL) # Disable all logging if not enabled
+
+setup_logging()
+
 # E | state(s)
 e_state = {}
 t_state = {}
 s_state = {}
 cb_state = {}    # <--- state for callback date/time
+
+# SMTP Rate Limiting
+smtp_locks = {}  # To store a lock for each SMTP server config (host_port_user)
+smtp_last_send_time = {} # To store the last send time for each SMTP server config
 
 # auth helpers
 def is_authorized(
@@ -163,28 +207,93 @@ def send_email(
           )
      )
 
-     start = time.time()
-     with smtplib.SMTP_SSL(
-          smtp_config['server'],
-          smtp_config['port']
-     ) as server:
-          server.login(
-               smtp_config['username'],
-               smtp_config['password']
-          )
-          server.sendmail(
-               smtp_config['username'],
-               to_email,
-               message.as_string()
-          )
-     eta    = round(
-          time.time() - start,
-          1
-     )
-     domain = smtp_config['username'].split(
-          '@'
-     )[-1]
-     return eta, f"smtp.{domain}"
+     start_time = time.time()
+     try:
+          with smtplib.SMTP_SSL(
+               smtp_config['server'],
+               smtp_config['port']
+          ) as server:
+               server.login(
+                    smtp_config['username'],
+                    smtp_config['password']
+               )
+               server.sendmail(
+                    smtp_config['username'],
+                    to_email,
+                    message.as_string()
+               )
+          eta = round(time.time() - start_time, 1)
+          domain = smtp_config['username'].split('@')[-1]
+          return eta, f"smtp.{domain}"
+     except Exception as e:
+          # Propagate the exception to be handled by the caller
+          raise e
+
+# Worker function for concurrent email sending
+async def send_email_worker(email_details: dict, context: ContextTypes.DEFAULT_TYPE):
+     """
+     Worker function to send a single email using a specific SMTP server.
+     Handles locking, rate limiting, and calls the core send_email function.
+     Reports status back via Telegram message.
+     """
+     to_email = email_details['to_email']
+     subject = email_details['subject']
+     html_content = email_details['html_content']
+     smtp_config = email_details['smtp_config']
+     display_name = email_details['display_name']
+     update = email_details['update'] # Telegram update object for replying
+
+     smtp_key = f"{smtp_config['server']}:{smtp_config['port']}:{smtp_config['username']}"
+
+     if smtp_key not in smtp_locks:
+          smtp_locks[smtp_key] = threading.Lock() # Should ideally be pre-initialized
+
+     acquired = False
+     try:
+          # Try to acquire the lock without blocking indefinitely to allow other tasks to proceed
+          # if this particular SMTP is busy or rate-limited.
+          # However, for strict rate-limiting per SMTP, blocking acquisition is needed.
+          # Let's stick to blocking acquisition as per the current design.
+          smtp_locks[smtp_key].acquire()
+          acquired = True
+
+          current_time = time.time()
+          last_sent = smtp_last_send_time.get(smtp_key, 0)
+
+          if current_time - last_sent < 60: # 60 seconds cooldown
+               if acquired:
+                    try: # Ensure release happens even if logging fails, though unlikely
+                         smtp_locks[smtp_key].release()
+                    except RuntimeError: # Already unlocked
+                         pass
+               logging.info(f"COOLDOWN: SMTP {smtp_config['display']} on cooldown. Task for {to_email} skipped by worker.")
+               return f"COOLDOWN:{smtp_config['display']}:{to_email}"
+
+          try:
+               logging.debug(f"Attempting to send email to {to_email} via {smtp_config['display']}")
+               eta, host_info = send_email(
+                    to_email,
+                    subject,
+                    html_content,
+                    smtp_config,
+                    display_name
+               )
+               smtp_last_send_time[smtp_key] = time.time()
+               logging.info(f"SUCCESS: Email to {to_email} via {smtp_config['display']} ({host_info}). ETA: {eta}s")
+               return f"SUCCESS:{smtp_config['display']}:{to_email}"
+          except Exception as e:
+               logging.error(f"FAILURE: Email to {to_email} via {smtp_config['display']}. Error: {e}", exc_info=True)
+               return f"FAILURE:{smtp_config['display']}:{to_email}:{e}"
+     finally:
+          if acquired:
+               try:
+                    if smtp_locks[smtp_key].locked(): # Check if current thread holds the lock
+                         smtp_locks[smtp_key].release()
+               except RuntimeError: # Already unlocked or lock object deleted (should not happen here)
+                    logging.warning(f"RuntimeError during lock release for {smtp_key}. Might have been released already.")
+               except Exception as e_rl: # Catch any other potential error during release
+                    logging.error(f"Unexpected error releasing lock for {smtp_key}: {e_rl}", exc_info=True)
+
 
 # menu builders
 def b_main():
@@ -476,79 +585,94 @@ async def template_cmd(
      ).replace(
           '{domain}',       ui['portal_url']
      )
-     service     = 'coinbase' if key.startswith('cb') else 'google'
-     svc_cfg     = CONFIG['smtp'][service]
-     chosen_disp = ui.get(
-          f'smtp_{service}',
-          smtp_servers(service)[0]
-     )
-     entry       = smtp_entry(
-          service,
-          chosen_disp
-     )
-     smtp_cfg    = {
-          'server':   entry['host'],
-          'port':     svc_cfg['port'],
-          'username': entry['username'],
-          'password': entry['password']
-     }
-     disp_name   = ' ' if service == 'coinbase' else 'Google'
+     service = 'coinbase' if key.startswith('cb') else 'google'
+     all_service_smtps = CONFIG['smtp'][service]['servers']
+     svc_port = CONFIG['smtp'][service]['port'] # Common port for the service
+     disp_name = ' ' if service == 'coinbase' else 'Google'
 
-     try:
-          eta, host = send_email(
-               recipient,
-               title,
-               html,
-               smtp_cfg,
-               disp_name
-          )
+     # Get user's preferred SMTP or default to the first one
+     preferred_disp = ui.get(f'smtp_{service}', all_service_smtps[0]['display'])
+
+     # Create a prioritized list of SMTP entries
+     sorted_smtp_entries = sorted(
+          all_service_smtps,
+          key=lambda s: s['display'] != preferred_disp # False (0) for preferred, True (1) for others
+     )
+
+     sent_successfully = False
+     logging.info(f"User {user_id} initiating single email send (template_cmd) for template '{key}' to '{recipient}'. Available SMTPs for '{service}': {[s['display'] for s in sorted_smtp_entries]}. Preferred: {preferred_disp}")
+     for entry in sorted_smtp_entries:
+          smtp_config = {
+               'server':   entry['host'],
+               'port':     svc_port, # Use common service port
+               'username': entry['username'],
+               'password': entry['password'],
+               'display':  entry['display'] # For logging and lock key
+          }
+
+          # Unique key for this SMTP config for locking and rate limiting
+          smtp_key = f"{smtp_config['server']}:{smtp_config['port']}:{smtp_config['username']}"
+
+          if smtp_key not in smtp_locks:
+               smtp_locks[smtp_key] = threading.Lock()
+
+          with smtp_locks[smtp_key]:
+               current_time = time.time()
+               last_sent = smtp_last_send_time.get(smtp_key, 0)
+
+               if current_time - last_sent < 60: # 1 minute cooldown
+                    logging.info(f"COOLDOWN: SMTP {smtp_config['display']} on cooldown for user {user_id}, recipient {recipient} (template_cmd). Skipping.")
+                    await update.message.reply_text(
+                         f"⏳ SMTP `{smtp_config['display']}` is on cooldown. Trying next...",
+                         parse_mode='Markdown'
+                    )
+                    continue # Try next SMTP server
+
+               try:
+                    logging.info(f"User {user_id} attempting single send to {recipient} via {smtp_config['display']} using template {key} (template_cmd).")
+                    eta, host_info = send_email(
+                         recipient,
+                         title,
+                         html,
+                         smtp_config,
+                         disp_name
+                    )
+                    smtp_last_send_time[smtp_key] = current_time
+                    logging.info(f"SUCCESS: Single send for user {user_id} to {recipient} via {smtp_config['display']} (template {key}) successful. ETA: {eta}s.")
+                    await update.message.reply_text(
+                         f"✅ Success\n"
+                         f"📤 SMTP: `{host_info}` (used `{smtp_config['display']}`)\n"
+                         f"⏱️ ETA: `{eta}` seconds\n"
+                         f"📧 Recipient: `{recipient}`",
+                         parse_mode='Markdown'
+                    )
+                    sent_successfully = True
+                    break # Email sent, exit loop
+               except smtplib.SMTPRecipientsRefused as e:
+                    logging.warning(f"SMTPRecipientsRefused for user {user_id} with {smtp_config['display']} for {recipient} (template {key}): {e}")
+                    await update.message.reply_text(
+                         f"⚠️ SMTP Error (Recipients Refused) with `{smtp_config['display']}`: {e}. Trying next...",
+                         parse_mode='Markdown'
+                    )
+               except smtplib.SMTPAuthenticationError as e:
+                    logging.warning(f"SMTPAuthenticationError for user {user_id} with {smtp_config['display']} for {recipient} (template {key}): {e}")
+                    await update.message.reply_text(
+                         f"🚫 SMTP Error (Authentication Failed) with `{smtp_config['display']}`: {e}. Trying next...",
+                         parse_mode='Markdown'
+                    )
+               except Exception as e: # Catch other SMTP related errors
+                    logging.error(f"General SMTP Error for user {user_id} with {smtp_config['display']} for {recipient} (template {key}): {e}", exc_info=True)
+                    await update.message.reply_text(
+                         f"❌ SMTP Error with `{smtp_config['display']}`: {e}. Trying next...",
+                         parse_mode='Markdown'
+                    )
+
+     if not sent_successfully:
+          logging.warning(f"Failed to send email for user {user_id} to {recipient} using template {key} after trying all SMTPs for {service} (template_cmd).")
           await update.message.reply_text(
-               f"✅ Success\n"
-               f"📤 SMTP: `{host}`\n"
-               f"⏱️ ETA: `{eta}` seconds\n"
-               f"📧 Recipient: `{recipient}`",
+               f"😔 Failed to send email to `{recipient}` after trying all available SMTP servers for {service}.",
                parse_mode='Markdown'
           )
-     except smtplib.SMTPRecipientsRefused:
-          if service == 'coinbase':
-               # try fallback
-               fallbacks = [
-                    srv for srv in CONFIG['smtp']['coinbase']['servers']
-                    if srv['display'] != chosen_disp
-               ]
-               if fallbacks:
-                    fb = fallbacks[0]
-                    fb_cfg = {
-                         'server':   fb['host'],
-                         'port':     svc_cfg['port'],
-                         'username': fb['username'],
-                         'password': fb['password']
-                    }
-                    try:
-                         eta, host = send_email(
-                              recipient,
-                              title,
-                              html,
-                              fb_cfg,
-                              disp_name
-                         )
-                         await update.message.reply_text(
-                              f"✅ Success (fallback)\n"
-                              f"📤 SMTP: `{host}`\n"
-                              f"⏱️ ETA: `{eta}` seconds\n"
-                              f"📧 Recipient: `{recipient}`",
-                              parse_mode='Markdown'
-                         )
-                    except smtplib.SMTPException:
-                         await update.message.reply_text(
-                              "smtps for coinbase down, please contact an admin"
-                         )
-               else:
-                    await update.message.reply_text(
-                         "smtps for coinbase down, please contact an admin"
-                    )
-          else:
-               raise
 
 # menu mapping
 MENU_MAP = {
@@ -782,75 +906,97 @@ async def message_input(
           else:
                service = 'coinbase' if key.startswith('cb') else 'google'
 
-          svc_cfg     = CONFIG['smtp'][service]
-          chosen_disp = ui.get(
-               f'smtp_{service}',
-               smtp_servers(service)[0]
-          )
-          entry       = smtp_entry(
-               service,
-               chosen_disp
-          )
-          smtp_cfg    = {
-               'server':   entry['host'],
-               'port':     svc_cfg['port'],
-               'username': entry['username'],
-               'password': entry['password']
-          }
-          disp_name   = ' ' if service == 'coinbase' else 'Google'
+          recipient_email = text # User's message is the recipient email
 
-          try:
-               eta, host = send_email(
-                    text,
-                    title,
-                    html,
-                    smtp_cfg,
-                    disp_name
-               )
-               return await update.message.reply_text(
-                    f"✅ Success\n"
-                    f"📤 SMTP: {host}\n"
-                    f"⏱️ ETA: {eta} seconds\n"
-                    f"📧 Recipient: {text}"
-               )
-          except smtplib.SMTPRecipientsRefused:
-               if service == 'coinbase':
-                    fallbacks = [
-                         srv for srv in CONFIG['smtp']['coinbase']['servers']
-                         if srv['display'] != chosen_disp
-                    ]
-                    if fallbacks:
-                         fb = fallbacks[0]
-                         fb_cfg = {
-                              'server':   fb['host'],
-                              'port':     svc_cfg['port'],
-                              'username': fb['username'],
-                              'password': fb['password']
-                         }
-                         try:
-                              eta, host = send_email(
-                                   text,
-                                   title,
-                                   html,
-                                   fb_cfg,
-                                   disp_name
-                              )
-                              return await update.message.reply_text(
-                                   f"✅ Success (fallback)\n"
-                                   f"📤 SMTP: {host}\n"
-                                   f"⏱️ ETA: {eta} seconds\n"
-                                   f"📧 Recipient: {text}"
-                              )
-                         except smtplib.SMTPException:
-                              return await update.message.reply_text(
-                                   "smtps for coinbase down, please contact an admin"
-                              )
-                    else:
-                         return await update.message.reply_text(
-                              "smtps for coinbase down, please contact an admin"
+          all_service_smtps = CONFIG['smtp'][service]['servers']
+          svc_port = CONFIG['smtp'][service]['port'] # Common port for the service
+          disp_name = ' ' if service == 'coinbase' else 'Google'
+
+          # Get user's preferred SMTP or default to the first one
+          preferred_disp = ui.get(f'smtp_{service}', all_service_smtps[0]['display'])
+
+          # Create a prioritized list of SMTP entries
+          sorted_smtp_entries = sorted(
+               all_service_smtps,
+               key=lambda s: s['display'] != preferred_disp # False (0) for preferred, True (1) for others
+          )
+
+          sent_successfully = False
+     logging.info(f"User {user_id} initiating single email send (message_input) for template '{key}' to '{recipient_email}'. Available SMTPs for '{service}': {[s['display'] for s in sorted_smtp_entries]}. Preferred: {preferred_disp}")
+          for entry in sorted_smtp_entries:
+               smtp_config = {
+                    'server':   entry['host'],
+                    'port':     svc_port,
+                    'username': entry['username'],
+                    'password': entry['password'],
+                    'display':  entry['display']
+               }
+
+               smtp_key = f"{smtp_config['server']}:{smtp_config['port']}:{smtp_config['username']}"
+
+               if smtp_key not in smtp_locks:
+                    smtp_locks[smtp_key] = threading.Lock()
+
+               with smtp_locks[smtp_key]:
+                    current_time = time.time()
+                    last_sent = smtp_last_send_time.get(smtp_key, 0)
+
+                    if current_time - last_sent < 60: # 1 minute cooldown
+                         logging.info(f"COOLDOWN: SMTP {smtp_config['display']} on cooldown for user {user_id}, recipient {recipient_email} (message_input). Skipping.")
+                         await update.message.reply_text(
+                              f"⏳ SMTP `{smtp_config['display']}` is on cooldown. Trying next...",
+                              parse_mode='Markdown'
                          )
-               else:
-                    raise
+                         continue
+
+                    try:
+                         logging.info(f"User {user_id} attempting single send to {recipient_email} via {smtp_config['display']} using template {key} (message_input).")
+                         eta, host_info = send_email(
+                              recipient_email,
+                              title,
+                              html,
+                              smtp_config,
+                              disp_name
+                         )
+                         smtp_last_send_time[smtp_key] = current_time
+                         logging.info(f"SUCCESS: Single send for user {user_id} to {recipient_email} via {smtp_config['display']} (template {key}) successful. ETA: {eta}s.")
+                         await update.message.reply_text(
+                              f"✅ Success\n"
+                              f"📤 SMTP: `{host_info}` (used `{smtp_config['display']}`)\n"
+                              f"⏱️ ETA: `{eta}` seconds\n"
+                              f"📧 Recipient: `{recipient_email}`",
+                              parse_mode='Markdown'
+                         )
+                         sent_successfully = True
+                         # Using 'return' here as message_input is an async handler that should conclude after a successful send.
+                         return
+                    except smtplib.SMTPRecipientsRefused as e:
+                         logging.warning(f"SMTPRecipientsRefused for user {user_id} with {smtp_config['display']} for {recipient_email} (template {key}, message_input): {e}")
+                         await update.message.reply_text(
+                              f"⚠️ SMTP Error (Recipients Refused) with `{smtp_config['display']}`: {e}. Trying next...",
+                              parse_mode='Markdown'
+                         )
+                    except smtplib.SMTPAuthenticationError as e:
+                         logging.warning(f"SMTPAuthenticationError for user {user_id} with {smtp_config['display']} for {recipient_email} (template {key}, message_input): {e}")
+                         await update.message.reply_text(
+                              f"🚫 SMTP Error (Authentication Failed) with `{smtp_config['display']}`: {e}. Trying next...",
+                              parse_mode='Markdown'
+                         )
+                    except Exception as e:
+                         logging.error(f"General SMTP Error for user {user_id} with {smtp_config['display']} for {recipient_email} (template {key}, message_input): {e}", exc_info=True)
+                         await update.message.reply_text(
+                              f"❌ SMTP Error with `{smtp_config['display']}`: {e}. Trying next...",
+                              parse_mode='Markdown'
+                         )
+
+          if not sent_successfully:
+               logging.warning(f"Failed to send email for user {user_id} to {recipient_email} using template {key} after trying all SMTPs for {service} (message_input).")
+               # Ensure this return is also an await if it's the last thing in an async function and it calls an async func
+               await update.message.reply_text(
+                    f"😔 Failed to send email to `{recipient_email}` after trying all available SMTP servers for {service}.",
+                    parse_mode='Markdown'
+               )
+               return # Exit if no email sent
 
 async def adduser(
      update: Update,
@@ -1026,7 +1172,179 @@ if __name__ == '__main__':
                message_input
           )
      )
+     app.add_handler(CommandHandler('sendbatch', send_batch_command))
      print(
           "[!] bot started"
      )
      app.run_polling()
+
+async def send_batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+     user_id = update.effective_user.id
+     if not is_authorized(user_id):
+          await update.message.reply_text("You are not authorized to use this command.")
+          return
+
+     args = context.args
+     if len(args) != 4:
+          await update.message.reply_text(
+               "Usage: /sendbatch <template_short_key> <recipient_email> <count> <service_name>\n"
+               "Example: /sendbatch cbemployee test@example.com 10 coinbase\n"
+               "Available template keys: cbemployee, cbpanel, cbticket, cbcallback, gemployee, gpanel"
+          )
+          return
+
+     template_short_key, recipient_email, count_str, service_name = args
+     service_name = service_name.lower()
+
+     if template_short_key not in MENU_MAP:
+          await update.message.reply_text(f"Invalid template key: {template_short_key}. \nAvailable: {', '.join(MENU_MAP.keys())}")
+          return
+
+     try:
+          count = int(count_str)
+          if count <= 0 or count > 200: # Max 200 emails per batch for safety
+               await update.message.reply_text("Count must be between 1 and 200.")
+               return
+     except ValueError:
+          await update.message.reply_text("Invalid count. Must be a number.")
+          return
+
+     if service_name not in CONFIG['smtp']:
+          await update.message.reply_text(f"Invalid service name: {service_name}. Available: {', '.join(CONFIG['smtp'].keys())}")
+          return
+
+     template_actual_key, email_title = MENU_MAP[template_short_key]
+     ui = E_ui(user_id)
+     try:
+          tpl = load_template(template_actual_key)
+     except FileNotFoundError:
+          await update.message.reply_text(f"Template file for {template_actual_key} not found.")
+          return
+
+     html_content_template = tpl.replace(
+          '{staff_name}',   ui.get('staff_name', 'N/A')
+     ).replace(
+          '{ticket_number}',ui.get('case_id', 'N/A')
+     ).replace(
+          '{case}',         ui.get('case_id', 'N/A')
+     ).replace(
+          '{panel_url}',    ui.get('portal_url', 'N/A')
+     ).replace(
+          '{portal_link}',  ui.get('portal_url', 'N/A')
+     ).replace(
+          '{domain}',       ui.get('portal_url', 'N/A')
+     )
+     # For callback template, it might need special handling if dynamic callback_window is needed per email
+     if template_actual_key == 'callback':
+          # For batch, using a generic placeholder or requiring it to be pre-set
+          html_content_template = html_content_template.replace('{callback_window}', "As per our recent communication")
+
+
+     all_service_smtps = CONFIG['smtp'][service_name].get('servers')
+     if not all_service_smtps:
+          await update.message.reply_text(f"No SMTP servers configured for service: {service_name}")
+          return
+
+     svc_port = CONFIG['smtp'][service_name]['port']
+     disp_name_service = ' ' if service_name == 'coinbase' else service_name.capitalize()
+
+     email_tasks = []
+     for i in range(count):
+          smtp_server_details = all_service_smtps[i % len(all_service_smtps)] # Cycle through SMTPs
+
+          # Create a unique HTML content if needed, e.g., by adding an email index
+          current_html_content = html_content_template.replace("<!-- INDEX -->", f" (Email {i+1}/{count})")
+          current_subject = f"{email_title} ({i+1}/{count})"
+
+
+          smtp_config_for_task = {
+               'server':   smtp_server_details['host'],
+               'port':     svc_port,
+               'username': smtp_server_details['username'],
+               'password': smtp_server_details['password'],
+               'display':  smtp_server_details['display']
+          }
+
+          email_details = {
+               'to_email': recipient_email, # Sending to the same recipient for this batch
+               'subject': current_subject,
+               'html_content': current_html_content,
+               'smtp_config': smtp_config_for_task,
+               'display_name': disp_name_service,
+               'update': update # Pass update object for potential replies from worker (though minimized)
+          }
+          email_tasks.append(email_details)
+
+     logging.info(f"User {user_id} initiating batch send: {count} emails to {recipient_email} using {service_name} SMTPs.")
+     await update.message.reply_text(f"Starting batch send of {count} emails to `{recipient_email}` using {service_name} SMTPs. This may take a while...")
+
+     num_threads = min(count, len(all_service_smtps) * 2, 10) # Limit threads: min(count, num_smtps*2, max_cap)
+     logging.debug(f"Batch send for user {user_id}: Using {num_threads} threads for {count} emails.")
+
+     results = []
+     # We need to run asyncio-compatible function (send_email_worker) in threads.
+     # ThreadPoolExecutor is for blocking IO. For async functions, it's more complex.
+     # A simple approach for now: Use run_coroutine_threadsafe if the executor was outside an event loop,
+     # or just directly await if tasks are managed carefully.
+     # Given send_email_worker is async, and this command is async, direct awaiting in a loop is an option,
+     # but doesn't give easy concurrency with ThreadPoolExecutor.
+     # A better pattern for running async functions concurrently: asyncio.gather
+     # However, send_email_worker itself has blocking `smtp_locks[smtp_key].acquire()`.
+     # This makes it a mix. For simplicity with existing `send_email` (blocking SMTP):
+     # We'll use ThreadPoolExecutor and wrap the async call.
+
+     try:
+          loop = asyncio.get_running_loop() # Use get_running_loop in async context
+     except RuntimeError:
+          logging.error("No running event loop found in send_batch_command. This should not happen in an async function.")
+          await update.message.reply_text("Critical error: Could not get event loop. Batch aborted.")
+          return
+
+     with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+          future_to_task = {
+               executor.submit(asyncio.run_coroutine_threadsafe, send_email_worker(task, context), loop): task
+               for task in email_tasks
+          }
+
+          for future in concurrent.futures.as_completed(future_to_task):
+               task_details = future_to_task[future]
+               try:
+                    # result() on future from run_coroutine_threadsafe gives the actual result of the coroutine
+                    # The second .result() call might block, ensure it has a timeout or is handled if worker can hang.
+                    # For now, assuming send_email_worker completes.
+                    result_from_coro = future.result(timeout=120) # Timeout for coro completion
+                    actual_result = result_from_coro.result(timeout=10) # Timeout for result of coro itself
+                    logging.debug(f"Batch task for user {user_id} (recipient: {task_details['to_email']}, smtp: {task_details['smtp_config']['display']}) completed with result: {actual_result}")
+                    results.append(actual_result)
+               except concurrent.futures.TimeoutError:
+                    logging.error(f"Timeout waiting for email task to {task_details['to_email']} via {task_details['smtp_config']['display']} for user {user_id}.")
+                    results.append(f"TIMEOUTERROR:{task_details['smtp_config']['display']}:{task_details['to_email']}:Task timed out")
+               except Exception as exc:
+                    logging.error(f"Exception for email task to {task_details['to_email']} via {task_details['smtp_config']['display']} for user {user_id}. Error: {exc}", exc_info=True)
+                    results.append(f"ERROR:{task_details['smtp_config']['display']}:{task_details['to_email']}:Execution error: {exc}")
+
+     success_count = sum(1 for r in results if isinstance(r, str) and r.startswith("SUCCESS"))
+     cooldown_count = sum(1 for r in results if isinstance(r, str) and r.startswith("COOLDOWN"))
+     # Include TIMEOUTERROR in failure_count
+     failure_count = sum(1 for r in results if isinstance(r, str) and (r.startswith("FAILURE") or r.startswith("ERROR") or r.startswith("TIMEOUTERROR")))
+
+     summary_message = (
+          f"Batch Send Complete:\n"
+          f"Total Attempted: {count}\n"
+          f"✅ Success: {success_count}\n"
+          f"⏳ Cooldown Skips: {cooldown_count}\n"
+          f"❌ Failures: {failure_count}\n\n"
+     )
+
+     logging.info(f"Batch send complete for user {user_id}. Total: {count}, Success: {success_count}, Cooldown: {cooldown_count}, Failures: {failure_count}")
+     # Optionally, list detailed results if not too many
+     if count <= 20: # Show details for small batches
+          summary_message += "Details:\n" + "\n".join(results)
+
+     # Split long messages if necessary
+     if len(summary_message) > 4000:
+          parts = [summary_message[i:i + 4000] for i in range(0, len(summary_message), 4000)]
+          for part in parts:
+               await update.message.reply_text(part)
+     else:
+          await update.message.reply_text(summary_message)
