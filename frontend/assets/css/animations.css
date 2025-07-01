@@ -1,0 +1,204 @@
+/* Custom Keyframe Animations */
+
+/* Defined in tailwind.config.js and can be used directly.
+   This file is for additional, more complex, or project-specific animations
+   that might not fit well into the Tailwind config or are used less frequently.
+*/
+
+/* Example: A more complex background gradient animation */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%; /* Ensure the gradient is large enough to animate */
+  animation: gradientShift 15s ease infinite;
+  /* Example gradient, use your theme colors */
+  /* background-image: linear-gradient(-45deg, #101014, #7F5AF0, #101014, #2CB67D); */
+}
+
+
+/* Text Animations */
+@keyframes textFocusIn {
+  0% {
+    filter: blur(12px);
+    opacity: 0;
+  }
+  100% {
+    filter: blur(0px);
+    opacity: 1;
+  }
+}
+.animate-text-focus-in {
+  animation: textFocusIn 1s cubic-bezier(0.550, 0.085, 0.680, 0.530) both;
+}
+
+@keyframes textPopUp {
+  0% {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-text-pop-up {
+  animation: textPopUp 0.5s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+}
+
+
+/* Mascot Specific Animations (Conceptual) */
+
+/* Nexus Guardian Animation - subtle pulsing and energy flow */
+@keyframes nexusGuardianPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 5px rgba(127, 90, 240, 0.4));
+  }
+  50% {
+    transform: scale(1.03);
+    filter: drop-shadow(0 0 15px rgba(127, 90, 240, 0.8));
+  }
+}
+.animate-nexus-guardian {
+  animation: nexusGuardianPulse 3s infinite ease-in-out;
+}
+
+
+/* Orb animation for escrow */
+@keyframes orb फ्लो { /* Renamed to avoid conflict with tailwind keyframe */
+  0% {
+    opacity: 1;
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: translateY(-10px) scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0px) scale(1);
+  }
+}
+.animate-orb-float {
+  animation: orbFloat 2.5s infinite ease-in-out;
+}
+
+/* Card tilt effect (can also be done with JS for more interactivity) */
+/* This is a basic CSS-only version if needed for simple cases */
+.card-tilt {
+  transition: transform 0.3s ease-out;
+}
+.card-tilt:hover {
+  transform: perspective(1000px) rotateX(5deg) rotateY(-5deg) scale3d(1.05, 1.05, 1.05);
+}
+
+
+/* Micro-interaction: Subtle button border animation on hover/focus */
+@keyframes buttonBorderGlow {
+  from {
+    box-shadow: 0 0 0px 0px rgba(127, 90, 240, 0.3);
+  }
+  to {
+    box-shadow: 0 0 0px 4px rgba(127, 90, 240, 0);
+  }
+}
+.animate-button-border-glow:hover,
+.animate-button-border-glow:focus {
+  animation: buttonBorderGlow 0.8s ease-out;
+}
+
+/* Page transition related animations if not using Nuxt's default or needing more control */
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.page-transition-fade-in {
+  animation: pageFadeIn 0.5s ease-out forwards;
+}
+
+@keyframes pageSlideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-transition-slide-up {
+  animation: pageSlideUp 0.6s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+}
+
+
+/* Loading spinner animation (if not using a component-based one) */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.animate-spin-custom {
+  animation: spin 1s linear infinite;
+}
+
+/* Shine effect for cards or buttons */
+@keyframes shine {
+  0% { transform: translateX(-100%) skewX(-20deg); }
+  100% { transform: translateX(100%) skewX(-20deg); }
+}
+
+.shine-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.shine-effect::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0) 100%);
+  transform: translateX(-100%) skewX(-20deg);
+  transition: transform 0.8s cubic-bezier(0.19, 1, 0.22, 1);
+  z-index: 1; /* Ensure it's above the content but below text/icons if any */
+}
+
+.shine-effect:hover::before {
+  transform: translateX(250%) skewX(-20deg); /* Adjust 250% based on element width */
+}
+
+
+/* Entrance animations for list items */
+@keyframes staggerIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Apply this class to a container, and JS to add 'animate-stagger-item' to children with delay */
+.stagger-container .animate-stagger-item {
+  opacity: 0; /* Start hidden */
+  animation: staggerIn 0.5s ease-out forwards;
+}
+
+/* Example usage for stagger:
+   <ul class="stagger-container">
+     <li v-for="(item, index) in items" :key="item.id"
+         class="animate-stagger-item"
+         :style="{ animationDelay: (index * 100) + 'ms' }">
+       {{ item.name }}
+     </li>
+   </ul>
+*/
+/* This comment provides context for how to use the staggerIn animation with JavaScript */
+/* Note: Direct CSS staggering for dynamic lists is hard without JS to apply delays. */
+/* For simpler cases with known number of items, you can use :nth-child selectors. */
+/*
+.stagger-container > *:nth-child(1) { animation-delay: 0.1s; }
+.stagger-container > *:nth-child(2) { animation-delay: 0.2s; }
+...
+*/

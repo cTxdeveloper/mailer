@@ -1,0 +1,155 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Satoshi:ital,wght@0,100;0,200;0,300;0,400;0,500;0,700;0,900;1,100;1,200;1,300;1,400;1,500;1,700;1,900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global Styles */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-obsidian-black text-pure-white font-sans;
+  min-height: 100vh;
+  overflow-x: hidden; /* Prevent horizontal scroll */
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  @apply font-display font-bold;
+}
+
+h1 { @apply text-4xl md:text-5xl lg:text-6xl; }
+h2 { @apply text-3xl md:text-4xl lg:text-5xl; }
+h3 { @apply text-2xl md:text-3xl lg:text-4xl; }
+h4 { @apply text-xl md:text-2xl lg:text-3xl; }
+h5 { @apply text-lg md:text-xl lg:text-2xl; }
+h6 { @apply text-base md:text-lg lg:text-xl; }
+
+/* Links */
+a {
+  @apply text-quantum-purple hover:text-purple-400 transition-colors duration-200;
+}
+
+/* Glassmorphism utility */
+.glass-effect {
+  @apply bg-glass-bg backdrop-blur-lg border border-white/10 rounded-xl shadow-lg;
+}
+
+/* Custom scrollbar for Webkit browsers */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-obsidian-black/50;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-quantum-purple/70 rounded-full;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-quantum-purple;
+}
+
+/* Focus visible styling for accessibility */
+*:focus-visible {
+  @apply outline-none ring-2 ring-quantum-purple ring-offset-2 ring-offset-obsidian-black;
+}
+
+/* Base input styling (can be extended by components) */
+.form-input-base {
+  @apply block w-full px-4 py-3 rounded-lg bg-gray-800/50 border border-gray-700;
+  @apply text-pure-white placeholder-gray-500 focus:ring-quantum-purple focus:border-quantum-purple;
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.form-input-base:focus {
+   @apply ring-2 ring-quantum-purple border-transparent;
+}
+
+/* Basic card styling */
+.card-base {
+  @apply bg-gray-900/70 border border-gray-700/50 rounded-xl shadow-xl p-6;
+}
+
+/* Noise background for glass effect (optional, can be subtle) */
+.noise-bg {
+  position: relative;
+}
+
+.noise-bg::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.03; /* Adjust for desired intensity */
+  pointer-events: none;
+  z-index: -1; /* Behind content */
+}
+
+/* Specific Vuetify overrides if needed, but prefer theming through Vuetify config/plugin */
+.v-btn {
+  @apply font-display tracking-wide; /* Example */
+}
+
+/* Toaster (vue-sonner) custom styling if needed */
+/* [data-sonner-toast][data-type="success"] { ... } */
+
+/* Lenis smooth scroll fix for fixed elements */
+html.lenis {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: hidden !important;
+}
+.lenis.lenis-scrolling iframe {
+  pointer-events: none;
+}
+
+/* Animations defined in tailwind.config.js can be used directly as class names */
+/* e.g., .animate-fade-in, .animate-pulse-glow */
+/* Additional global animation classes can be added here or in animations.css */
+
+/* Global transition for theme changes */
+body, .v-application {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Ensure the app fills the viewport height */
+#__nuxt, .v-application, .v-application__wrap {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.v-main {
+  flex-grow: 1;
+}
+
+/* Custom button styles that can be applied via @apply */
+.btn-primary {
+  @apply bg-quantum-purple text-pure-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-purple-500 transition-all duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-quantum-purple focus:ring-opacity-50;
+}
+
+.btn-secondary {
+  @apply bg-transparent border-2 border-quantum-purple text-quantum-purple font-semibold py-3 px-6 rounded-lg hover:bg-quantum-purple hover:text-pure-white transition-all duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-quantum-purple focus:ring-opacity-50;
+}
+
+.btn-ghost {
+  @apply bg-transparent text-quantum-purple font-semibold py-3 px-6 rounded-lg hover:bg-quantum-purple/10 transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-quantum-purple focus:ring-opacity-50;
+}

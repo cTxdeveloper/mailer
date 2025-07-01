@@ -1,0 +1,42 @@
+{
+  "name": "access-marketplace",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "start": "nuxt start",
+    "generate": "nuxt generate",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@headlessui/vue": "^1.7.22",
+    "@pinia/nuxt": "^0.5.1",
+    "@vee-validate/nuxt": "^4.13.1",
+    "@vueuse/motion": "^2.2.3",
+    "@vueuse/nuxt": "^10.11.0",
+    "apexcharts": "^3.50.0",
+    "dayjs": "^1.11.11",
+    "gsap": "^3.12.5",
+    "lenis": "^1.1.6",
+    "nuxt": "^3.12.2",
+    "pinia": "^2.1.7",
+    "three": "^0.166.1",
+    "vee-validate": "^4.13.1",
+    "vue-sonner": "^1.1.2",
+    "vue3-apexcharts": "^1.5.3",
+    "vuetify": "^3.6.10"
+  },
+  "devDependencies": {
+    "@nuxt/eslint-config": "^0.3.13",
+    "@types/three": "^0.166.0",
+    "eslint": "^9.6.0",
+    "nuxt-phosphor-icons": "^1.2.1",
+    "sass": "^1.77.6",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.5.3",
+    "vite-plugin-vuetify": "^2.0.3",
+    "vue-tsc": "^2.0.26"
+  }
+}
